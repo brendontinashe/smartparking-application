@@ -4,9 +4,11 @@ import { useParkingContext } from "@/context/parking-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
+import { Button } from "@/components/ui/button"
+import { RefreshCw } from "lucide-react"
 
 export default function ParkingStats() {
-  const { parkingData } = useParkingContext()
+  const { parkingData, fetchParkingStatus, isLoading } = useParkingContext()
 
   // Calculate overall statistics
   const totalSpots = parkingData.spots.length
@@ -50,9 +52,19 @@ export default function ParkingStats() {
     { name: "Public", value: publicVehicles, color: "#a855f7" },
   ]
 
+  const handleRefresh = async () => {
+    await fetchParkingStatus()
+  }
+
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Parking Statistics</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">Parking Statistics</h2>
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+          Refresh Data
+        </Button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -188,4 +200,3 @@ export default function ParkingStats() {
     </div>
   )
 }
-

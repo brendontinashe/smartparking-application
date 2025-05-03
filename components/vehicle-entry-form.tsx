@@ -182,4 +182,3 @@ export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) 
     </div>
   )
 }
-

@@ -9,7 +9,7 @@ import { useParkingContext } from "@/context/parking-context"
 import ParkingBuilding from "./parking-building"
 import ParkingFloorDetails from "./parking-floor-details"
 import { Button } from "@/components/ui/button"
-import { Upload, X } from "lucide-react"
+import { Upload, X, RefreshCw } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -36,18 +36,13 @@ export default function ParkingVisualization() {
   const entryInputRef = useRef<HTMLInputElement>(null)
   const exitInputRef = useRef<HTMLInputElement>(null)
   const controlsRef = useRef(null)
-  const { parkingData, allocateParking } = useParkingContext()
+  const { parkingData, allocateParking, fetchParkingStatus, isLoading } = useParkingContext()
 
-  const handleEntryImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setProcessingImage(true)
-
-      // Create a URL for the image
-      const imageUrl = URL.createObjectURL(file)
-      setEntryImage(imageUrl)
-
-      // Simulate AI processing
+  // Function to simulate license plate extraction from image
+  const simulateLicensePlateExtraction = (
+    file: File,
+  ): Promise<{ licensePlate: string; vehicleType: "government" | "private" | "public" }> => {
+    return new Promise((resolve) => {
       setTimeout(() => {
         // Generate a random license plate
         const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -61,19 +56,41 @@ export default function ParkingVisualization() {
           numbers.charAt(Math.floor(Math.random() * numbers.length)) +
           numbers.charAt(Math.floor(Math.random() * numbers.length))
 
-        setLicensePlate(randomLicensePlate)
-
         // Randomly determine vehicle type
         const types: ["government", "private", "public"] = ["government", "private", "public"]
-        setVehicleType(types[Math.floor(Math.random() * types.length)])
+        const vehicleType = types[Math.floor(Math.random() * types.length)]
 
-        setProcessingImage(false)
-        setShowEntryModal(true)
+        resolve({ licensePlate: randomLicensePlate, vehicleType })
       }, 1500)
+    })
+  }
+
+  const handleEntryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setProcessingImage(true)
+
+      // Create a URL for the image
+      const imageUrl = URL.createObjectURL(file)
+      setEntryImage(imageUrl)
+
+      try {
+        // Simulate AI processing to extract license plate
+        const { licensePlate: extractedPlate, vehicleType: extractedType } = await simulateLicensePlateExtraction(file)
+
+        setLicensePlate(extractedPlate)
+        setVehicleType(extractedType)
+        setShowEntryModal(true)
+      } catch (error) {
+        console.error("Error processing image:", error)
+        alert("Failed to process the image. Please try again.")
+      } finally {
+        setProcessingImage(false)
+      }
     }
   }
 
-  const handleExitImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleExitImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       setProcessingImage(true)
@@ -82,57 +99,89 @@ export default function ParkingVisualization() {
       const imageUrl = URL.createObjectURL(file)
       setExitImage(imageUrl)
 
-      // Simulate AI processing
-      setTimeout(() => {
-        // Find a random occupied spot
-        const occupiedSpots = parkingData.spots.filter((spot) => spot.isOccupied)
-        if (occupiedSpots.length > 0) {
-          const randomSpot = occupiedSpots[Math.floor(Math.random() * occupiedSpots.length)]
-          setLicensePlate(randomSpot.licensePlate)
-          setVehicleType(randomSpot.vehicleType)
-        } else {
-          // Fallback if no occupied spots
-          setLicensePlate("ABC 123")
-          setVehicleType("private")
-        }
+      try {
+        // Simulate AI processing to extract license plate
+        const { licensePlate: extractedPlate, vehicleType: extractedType } = await simulateLicensePlateExtraction(file)
 
-        setProcessingImage(false)
+        setLicensePlate(extractedPlate)
+        setVehicleType(extractedType)
         setShowExitModal(true)
-      }, 1500)
+      } catch (error) {
+        console.error("Error processing image:", error)
+        alert("Failed to process the image. Please try again.")
+      } finally {
+        setProcessingImage(false)
+      }
     }
   }
 
-  const confirmEntry = () => {
+  const confirmEntry = async () => {
     // Calculate expected departure time (2 hours from now)
     const now = new Date()
     const departureTime = new Date(now.getTime() + 2 * 60 * 60 * 1000)
     const arrivalTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`
     const expectedDeparture = `${departureTime.getHours().toString().padStart(2, "0")}:${departureTime.getMinutes().toString().padStart(2, "0")}`
 
-    // Allocate parking
-    allocateParking({
-      licensePlate,
-      vehicleType,
-      arrivalTime,
-      expectedDeparture,
-      stayDuration: 2,
-    })
+    try {
+      // Allocate parking using the API
+      const result = await allocateParking({
+        licensePlate,
+        vehicleType,
+        arrivalTime,
+        expectedDeparture,
+        stayDuration: 2,
+      })
 
-    // Show the vehicle in the 3D view
-    setEntryVehicle(true)
-    setTimeout(() => setEntryVehicle(false), 5000)
+      if (result.success) {
+        // Show the vehicle in the 3D view
+        setEntryVehicle(true)
+        setTimeout(() => setEntryVehicle(false), 5000)
 
-    // Close the modal
-    setShowEntryModal(false)
+        // Close the modal
+        setShowEntryModal(false)
+
+        // Show success message
+        alert(`Parking allocated successfully! ${result.message}`)
+      } else {
+        alert(`Failed to allocate parking: ${result.message}`)
+      }
+    } catch (error) {
+      console.error("Error during parking allocation:", error)
+      alert("An error occurred during parking allocation. Please try again.")
+    }
   }
 
-  const confirmExit = () => {
-    // Show the vehicle in the 3D view
-    setExitVehicle(true)
-    setTimeout(() => setExitVehicle(false), 5000)
+  const confirmExit = async () => {
+    // In a real implementation, you would call an API to process the exit
+    // For now, we'll just simulate it
 
-    // Close the modal
-    setShowExitModal(false)
+    try {
+      // Show the vehicle in the 3D view
+      setExitVehicle(true)
+      setTimeout(() => setExitVehicle(false), 5000)
+
+      // Close the modal
+      setShowExitModal(false)
+
+      // Refresh parking data after exit
+      await fetchParkingStatus()
+
+      // Show success message
+      alert("Vehicle exit processed successfully!")
+    } catch (error) {
+      console.error("Error during exit processing:", error)
+      alert("An error occurred during exit processing. Please try again.")
+    }
+  }
+
+  // Function to refresh parking data
+  const refreshParkingData = async () => {
+    try {
+      await fetchParkingStatus()
+    } catch (error) {
+      console.error("Error refreshing parking data:", error)
+      alert("Failed to refresh parking data. Please try again.")
+    }
   }
 
   return (
@@ -150,13 +199,19 @@ export default function ParkingVisualization() {
       )}
 
       <div className="absolute top-4 left-4 z-10 bg-white/90 p-3 rounded-lg shadow-md">
-        <h3 className="font-medium text-sm mb-2">Vehicle Simulation</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-medium text-sm">Vehicle Simulation</h3>
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={refreshParkingData} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            <span className="sr-only">Refresh</span>
+          </Button>
+        </div>
         <div className="space-y-2">
           <Button
             onClick={() => entryInputRef.current?.click()}
             className="w-full bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
             size="sm"
-            disabled={processingImage}
+            disabled={processingImage || isLoading}
           >
             {processingImage ? (
               <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
@@ -177,7 +232,7 @@ export default function ParkingVisualization() {
             onClick={() => exitInputRef.current?.click()}
             className="w-full bg-red-600 hover:bg-red-700 text-white flex items-center gap-2"
             size="sm"
-            disabled={processingImage}
+            disabled={processingImage || isLoading}
           >
             {processingImage ? (
               <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
@@ -280,16 +335,26 @@ export default function ParkingVisualization() {
                           value="government"
                           id="government"
                           checked={vehicleType === "government"}
-                          readOnly
+                          onChange={() => setVehicleType("government")}
                         />
                         <Label htmlFor="government">Government</Label>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="private" id="private" checked={vehicleType === "private"} readOnly />
+                        <RadioGroupItem
+                          value="private"
+                          id="private"
+                          checked={vehicleType === "private"}
+                          onChange={() => setVehicleType("private")}
+                        />
                         <Label htmlFor="private">Private</Label>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="public" id="public" checked={vehicleType === "public"} readOnly />
+                        <RadioGroupItem
+                          value="public"
+                          id="public"
+                          checked={vehicleType === "public"}
+                          onChange={() => setVehicleType("public")}
+                        />
                         <Label htmlFor="public">Public</Label>
                       </div>
                     </RadioGroup>
@@ -303,8 +368,20 @@ export default function ParkingVisualization() {
             <Button type="button" variant="outline" onClick={() => setShowEntryModal(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={confirmEntry} className="bg-green-600 hover:bg-green-700">
-              Confirm & Allocate Parking
+            <Button
+              type="button"
+              onClick={confirmEntry}
+              className="bg-green-600 hover:bg-green-700"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                  Processing...
+                </>
+              ) : (
+                "Confirm & Allocate Parking"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -355,8 +432,15 @@ export default function ParkingVisualization() {
             <Button type="button" variant="outline" onClick={() => setShowExitModal(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={confirmExit} className="bg-red-600 hover:bg-red-700">
-              Confirm Payment & Exit
+            <Button type="button" onClick={confirmExit} className="bg-red-600 hover:bg-red-700" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                  Processing...
+                </>
+              ) : (
+                "Confirm Payment & Exit"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -364,4 +448,3 @@ export default function ParkingVisualization() {
     </div>
   )
 }
-

@@ -100,4 +100,3 @@ export default function ParkingFloorDetails({ floorNumber }: ParkingFloorDetails
     </div>
   )
 }
-
