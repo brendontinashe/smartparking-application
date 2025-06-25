@@ -1,7 +1,8 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import type { ParkingData, VehicleEntry } from "@/types/parking"
+import type { ParkingData, VehicleEntry, ApiAllocationResponse, ParkingAlgorithm } from "@/types/parking"
+import { fetchParkingStatus, allocateParking as apiAllocateParking } from "@/services/api"
 
 // Initial empty parking data structure
 const emptyParkingData: ParkingData = {
@@ -10,13 +11,18 @@ const emptyParkingData: ParkingData = {
 
 interface ParkingContextType {
   parkingData: ParkingData
-  allocateParking: (entry: VehicleEntry) => Promise<{
+  allocateParking: (
+    entry: VehicleEntry,
+    algorithm?: ParkingAlgorithm,
+  ) => Promise<{
     success: boolean
     floor?: number
     spot?: number
     message: string
+    algorithmUsed?: string
+    metrics?: { [key: string]: number }
   }>
-  fetchParkingStatus: () => Promise<void>
+  refreshParkingStatus: () => Promise<void>
   isLoading: boolean
 }
 
@@ -27,35 +33,11 @@ export function ParkingProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(false)
 
   // Fetch parking status from the API
-  const fetchParkingStatus = async () => {
+  const refreshParkingStatus = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch("http://localhost:8000/api/parking/status")
-      if (!response.ok) {
-        throw new Error("Failed to fetch parking status")
-      }
-
-      const data = await response.json()
-
-      // Transform the API data to match our frontend model
-      // This is a placeholder - you'll need to adjust based on the actual API response
-      const transformedData: ParkingData = {
-        spots: data.spots.map((spot: any) => ({
-          id: spot.id,
-          floor: spot.floor,
-          isOccupied: spot.status === "occupied",
-          vehicleType: mapVehicleTypeFromApi(spot.vehicle_plate_type),
-          licensePlate: spot.vehicle_plate_num || "",
-          arrivalTime: spot.arrival_time
-            ? new Date(spot.arrival_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-            : "",
-          expectedDeparture: spot.departure_time
-            ? new Date(spot.departure_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-            : "",
-        })),
-      }
-
-      setParkingData(transformedData)
+      const data = await fetchParkingStatus()
+      setParkingData(data)
     } catch (error) {
       console.error("Error fetching parking status:", error)
       // Fallback to empty data if API fails
@@ -65,79 +47,27 @@ export function ParkingProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Map vehicle type from API to frontend model
-  const mapVehicleTypeFromApi = (apiVehicleType: number): "government" | "private" | "public" => {
-    switch (apiVehicleType) {
-      case 2:
-        return "government"
-      case 1:
-        return "public"
-      case 0:
-      default:
-        return "private"
-    }
-  }
-
-  // Map vehicle type from frontend to API model
-  const mapVehicleTypeToApi = (vehicleType: "government" | "private" | "public"): number => {
-    switch (vehicleType) {
-      case "government":
-        return 2
-      case "public":
-        return 1
-      case "private":
-      default:
-        return 0
-    }
-  }
-
   // Fetch parking status on component mount
   useEffect(() => {
-    fetchParkingStatus()
+    refreshParkingStatus()
   }, [])
 
-  // Allocate parking using the API
-  const allocateParking = async (entry: VehicleEntry) => {
+  // Allocate parking using the API with algorithm selection
+  const allocateParking = async (entry: VehicleEntry, algorithm?: ParkingAlgorithm) => {
     setIsLoading(true)
     try {
-      // Calculate arrival and departure times in ISO format
-      const now = new Date()
-      const arrivalTime = now.toISOString()
-
-      // Calculate departure time based on stay duration
-      const departureTime = new Date(now.getTime() + entry.stayDuration * 60 * 60 * 1000).toISOString()
-
-      const payload = {
-        vehicle_plate_num: entry.licensePlate,
-        vehicle_plate_type: mapVehicleTypeToApi(entry.vehicleType),
-        vehicle_type: 0, // Default to Car (0)
-        arrival_time: arrivalTime,
-        departure_time: departureTime,
-        priority_level: entry.vehicleType === "government" ? 2 : 1, // Higher priority for government vehicles
-      }
-
-      const response = await fetch("http://localhost:8000/api/parking/allocate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to allocate parking")
-      }
-
-      const data = await response.json()
+      const result: ApiAllocationResponse = await apiAllocateParking(entry, algorithm || "ai")
 
       // Refresh parking status after allocation
-      await fetchParkingStatus()
+      await refreshParkingStatus()
 
       return {
-        success: true,
-        floor: data.floor,
-        spot: data.spot_id,
-        message: `Vehicle ${entry.licensePlate} has been allocated to Floor ${data.floor + 1}, Spot ${data.spot_id}.`,
+        success: result.success,
+        floor: result.floor,
+        spot: result.spot_id,
+        message: result.message,
+        algorithmUsed: result.algorithm_used,
+        metrics: result.allocation_metrics,
       }
     } catch (error) {
       console.error("Error allocating parking:", error)
@@ -151,7 +81,7 @@ export function ParkingProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ParkingContext.Provider value={{ parkingData, allocateParking, fetchParkingStatus, isLoading }}>
+    <ParkingContext.Provider value={{ parkingData, allocateParking, refreshParkingStatus, isLoading }}>
       {children}
     </ParkingContext.Provider>
   )

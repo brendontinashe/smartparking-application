@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import type { ParkingAlgorithm } from "@/types/parking-algorithm" // Declare the ParkingAlgorithm variable
 
 import { useState, useRef, Suspense } from "react"
 import { Canvas } from "@react-three/fiber"
@@ -20,6 +21,9 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { processVehicleExit } from "@/services/api"
+import { useAlgorithmContext } from "@/context/algorithm-context"
+import { Brain, Shuffle, List } from "lucide-react"
 
 export default function ParkingVisualization() {
   const [selectedFloor, setSelectedFloor] = useState<number | null>(null)
@@ -32,11 +36,13 @@ export default function ParkingVisualization() {
   const [licensePlate, setLicensePlate] = useState<string>("")
   const [vehicleType, setVehicleType] = useState<"government" | "private" | "public">("private")
   const [processingImage, setProcessingImage] = useState<boolean>(false)
+  const [exitDetails, setExitDetails] = useState<{ duration: string; fee: number } | null>(null)
 
   const entryInputRef = useRef<HTMLInputElement>(null)
   const exitInputRef = useRef<HTMLInputElement>(null)
   const controlsRef = useRef(null)
-  const { parkingData, allocateParking, fetchParkingStatus, isLoading } = useParkingContext()
+  const { parkingData, allocateParking, refreshParkingStatus, isLoading } = useParkingContext()
+  const { selectedAlgorithm } = useAlgorithmContext()
 
   // Function to simulate license plate extraction from image
   const simulateLicensePlateExtraction = (
@@ -100,11 +106,31 @@ export default function ParkingVisualization() {
       setExitImage(imageUrl)
 
       try {
-        // Simulate AI processing to extract license plate
-        const { licensePlate: extractedPlate, vehicleType: extractedType } = await simulateLicensePlateExtraction(file)
+        // Find a random occupied spot for simulation
+        const occupiedSpots = parkingData.spots.filter((spot) => spot.isOccupied)
 
-        setLicensePlate(extractedPlate)
-        setVehicleType(extractedType)
+        if (occupiedSpots.length > 0) {
+          const randomSpot = occupiedSpots[Math.floor(Math.random() * occupiedSpots.length)]
+          setLicensePlate(randomSpot.licensePlate)
+          setVehicleType(randomSpot.vehicleType)
+
+          // Set simulated exit details
+          setExitDetails({
+            duration: "2h 15m",
+            fee: 10.5,
+          })
+        } else {
+          // Fallback if no occupied spots
+          const { licensePlate: extractedPlate, vehicleType: extractedType } =
+            await simulateLicensePlateExtraction(file)
+          setLicensePlate(extractedPlate)
+          setVehicleType(extractedType)
+          setExitDetails({
+            duration: "1h 30m",
+            fee: 7.5,
+          })
+        }
+
         setShowExitModal(true)
       } catch (error) {
         console.error("Error processing image:", error)
@@ -123,14 +149,17 @@ export default function ParkingVisualization() {
     const expectedDeparture = `${departureTime.getHours().toString().padStart(2, "0")}:${departureTime.getMinutes().toString().padStart(2, "0")}`
 
     try {
-      // Allocate parking using the API
-      const result = await allocateParking({
-        licensePlate,
-        vehicleType,
-        arrivalTime,
-        expectedDeparture,
-        stayDuration: 2,
-      })
+      // Allocate parking using the selected algorithm
+      const result = await allocateParking(
+        {
+          licensePlate,
+          vehicleType,
+          arrivalTime,
+          expectedDeparture,
+          stayDuration: 2,
+        },
+        selectedAlgorithm,
+      ) // Pass the selected algorithm
 
       if (result.success) {
         // Show the vehicle in the 3D view
@@ -152,10 +181,10 @@ export default function ParkingVisualization() {
   }
 
   const confirmExit = async () => {
-    // In a real implementation, you would call an API to process the exit
-    // For now, we'll just simulate it
-
     try {
+      // Process vehicle exit using the API
+      const result = await processVehicleExit(licensePlate)
+
       // Show the vehicle in the 3D view
       setExitVehicle(true)
       setTimeout(() => setExitVehicle(false), 5000)
@@ -164,10 +193,14 @@ export default function ParkingVisualization() {
       setShowExitModal(false)
 
       // Refresh parking data after exit
-      await fetchParkingStatus()
+      await refreshParkingStatus()
 
       // Show success message
-      alert("Vehicle exit processed successfully!")
+      if (result.success) {
+        alert(`Vehicle exit processed successfully! Fee: $${result.parking_fee.toFixed(2)}`)
+      } else {
+        alert("Vehicle exit processed.")
+      }
     } catch (error) {
       console.error("Error during exit processing:", error)
       alert("An error occurred during exit processing. Please try again.")
@@ -177,10 +210,21 @@ export default function ParkingVisualization() {
   // Function to refresh parking data
   const refreshParkingData = async () => {
     try {
-      await fetchParkingStatus()
+      await refreshParkingStatus()
     } catch (error) {
       console.error("Error refreshing parking data:", error)
       alert("Failed to refresh parking data. Please try again.")
+    }
+  }
+
+  const getAlgorithmInfo = (algorithm: ParkingAlgorithm) => {
+    switch (algorithm) {
+      case "ai":
+        return { icon: Brain, color: "bg-blue-500", name: "AI Algorithm" }
+      case "random":
+        return { icon: Shuffle, color: "bg-orange-500", name: "Random" }
+      case "sequential":
+        return { icon: List, color: "bg-purple-500", name: "Sequential" }
     }
   }
 
@@ -271,7 +315,20 @@ export default function ParkingVisualization() {
       </Canvas>
 
       <div className="absolute bottom-4 left-4 z-10 bg-white/90 p-3 rounded-lg shadow-md">
-        <h3 className="font-medium text-sm mb-2">AI Vehicle Processing</h3>
+        <h3 className="font-medium text-sm mb-2">Current Algorithm</h3>
+        <div className="flex items-center gap-2 mb-3">
+          {(() => {
+            const { icon: Icon, color, name } = getAlgorithmInfo(selectedAlgorithm)
+            return (
+              <>
+                <div className={`p-2 rounded-lg ${color} text-white`}>
+                  <Icon className="h-4 w-4" />
+                </div>
+                <span className="text-sm font-medium">{name}</span>
+              </>
+            )
+          })()}
+        </div>
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-green-500"></div>
@@ -280,9 +337,6 @@ export default function ParkingVisualization() {
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-red-500"></div>
             <span className="text-sm">Exit: Departure processing & billing</span>
-          </div>
-          <div className="text-xs text-gray-500 mt-1">
-            AI analyzes vehicle type, expected duration, and current occupancy to allocate optimal parking spots
           </div>
         </div>
       </div>
@@ -420,8 +474,8 @@ export default function ParkingVisualization() {
                 <div>
                   <Label className="text-sm font-medium">Parking Information</Label>
                   <div className="mt-1 text-sm">
-                    <p>Duration: 2h 15m</p>
-                    <p>Amount Due: $10.50</p>
+                    <p>Duration: {exitDetails?.duration || "2h 15m"}</p>
+                    <p>Amount Due: ${exitDetails?.fee.toFixed(2) || "10.50"}</p>
                   </div>
                 </div>
               </div>

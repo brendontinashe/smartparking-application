@@ -6,6 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { format } from "date-fns"
 import { useParkingContext } from "@/context/parking-context"
+import { useAlgorithmContext } from "@/context/algorithm-context"
+import { Brain, Shuffle, List } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,6 +20,7 @@ import { CheckCircle } from "lucide-react"
 const formSchema = z.object({
   licensePlate: z.string().min(4, { message: "License plate is required" }),
   vehicleType: z.enum(["government", "private", "public"]),
+  vehicleCategory: z.enum(["car", "truck", "motorcycle"]),
   stayDuration: z.string().min(1, { message: "Stay duration is required" }),
   arrivalTime: z.string().min(1, { message: "Arrival time is required" }),
 })
@@ -28,8 +31,11 @@ interface VehicleEntryFormProps {
   onComplete: () => void
 }
 
+type ParkingAlgorithm = "ai" | "random" | "sequential"
+
 export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) {
   const { allocateParking } = useParkingContext()
+  const { selectedAlgorithm } = useAlgorithmContext()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [allocationResult, setAllocationResult] = useState<{
     success: boolean
@@ -47,18 +53,27 @@ export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) 
     resolver: zodResolver(formSchema),
     defaultValues: {
       vehicleType: "private",
+      vehicleCategory: "car",
       stayDuration: "1",
       arrivalTime: format(new Date(), "HH:mm"),
     },
   })
 
+  const getAlgorithmInfo = (algorithm: ParkingAlgorithm) => {
+    switch (algorithm) {
+      case "ai":
+        return { icon: Brain, color: "bg-blue-500", name: "AI Algorithm", description: "Smart optimization" }
+      case "random":
+        return { icon: Shuffle, color: "bg-orange-500", name: "Random Allocation", description: "Random selection" }
+      case "sequential":
+        return { icon: List, color: "bg-purple-500", name: "Sequential Allocation", description: "First available" }
+    }
+  }
+
   const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true)
 
     try {
-      // Simulate AI processing and license plate recognition
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
       // Calculate expected departure time
       const arrivalTimeParts = data.arrivalTime.split(":")
       const arrivalHour = Number.parseInt(arrivalTimeParts[0])
@@ -71,14 +86,17 @@ export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) 
 
       const expectedDeparture = format(departureDate, "HH:mm")
 
-      // Allocate parking using the algorithm
-      const result = allocateParking({
-        licensePlate: data.licensePlate,
-        vehicleType: data.vehicleType,
-        arrivalTime: data.arrivalTime,
-        expectedDeparture,
-        stayDuration: Number.parseInt(data.stayDuration),
-      })
+      // Allocate parking using the API
+      const result = await allocateParking(
+        {
+          licensePlate: data.licensePlate,
+          vehicleType: data.vehicleType,
+          arrivalTime: data.arrivalTime,
+          expectedDeparture,
+          stayDuration: Number.parseInt(data.stayDuration),
+        },
+        selectedAlgorithm,
+      )
 
       setAllocationResult(result)
 
@@ -98,6 +116,26 @@ export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) 
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6">Vehicle Entry</h2>
+
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+        <h3 className="text-sm font-medium text-gray-700 mb-2">Current Allocation Algorithm</h3>
+        <div className="flex items-center gap-3">
+          {(() => {
+            const { icon: Icon, color, name, description } = getAlgorithmInfo(selectedAlgorithm)
+            return (
+              <>
+                <div className={`p-2 rounded-lg ${color} text-white`}>
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-medium text-sm">{name}</div>
+                  <div className="text-xs text-gray-500">{description}</div>
+                </div>
+              </>
+            )
+          })()}
+        </div>
+      </div>
 
       {allocationResult && (
         <Alert className={`mb-6 ${allocationResult.success ? "bg-green-50" : "bg-red-50"}`}>
@@ -146,6 +184,24 @@ export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) 
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="public" id="public" />
                   <Label htmlFor="public">Public</Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Vehicle Category</Label>
+              <RadioGroup defaultValue="car" className="flex space-x-4" {...register("vehicleCategory")}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="car" id="car" />
+                  <Label htmlFor="car">Car</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="truck" id="truck" />
+                  <Label htmlFor="truck">Truck</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="motorcycle" id="motorcycle" />
+                  <Label htmlFor="motorcycle">Motorcycle</Label>
                 </div>
               </RadioGroup>
             </div>
