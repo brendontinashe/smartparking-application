@@ -1,1 +1,1 @@
-export type ParkingAlgorithm = "ai" | "random" | "sequential"
+export type ParkingAlgorithm = "algorithm" | "random" | "sequential"

@@ -44,8 +44,8 @@ export default function AlgorithmComparison({
 
   // Mock data for demonstration when no real data is available
   const mockComparisonData = {
-    ai: {
-      algorithm: "ai",
+    algorithm: {
+      algorithm: "algorithm",
       totalAllocations: 0,
       averageWalkingDistance: 0,
       spaceUtilization: 0,
@@ -75,10 +75,10 @@ export default function AlgorithmComparison({
 
   const data = comparisonData || mockComparisonData
   const hasData =
-    data.ai.totalAllocations > 0 || data.random.totalAllocations > 0 || data.sequential.totalAllocations > 0
+    data.algorithm.totalAllocations > 0 || data.random.totalAllocations > 0 || data.sequential.totalAllocations > 0
 
   const algorithms = [
-    { id: "ai", name: "AI Algorithm", icon: Brain, color: "#3b82f6" },
+    { id: "algorithm", name: "AI Algorithm", icon: Brain, color: "#3b82f6" },
     { id: "random", name: "Random", icon: Shuffle, color: "#f97316" },
     { id: "sequential", name: "Sequential", icon: List, color: "#a855f7" },
   ]
@@ -124,19 +124,19 @@ export default function AlgorithmComparison({
   const barChartData = [
     {
       metric: "Overall Score",
-      AI: data.ai.overallScore,
+      AI: data.algorithm.overallScore,
       Random: data.random.overallScore,
       Sequential: data.sequential.overallScore,
     },
     {
       metric: "Space Utilization",
-      AI: data.ai.spaceUtilization,
+      AI: data.algorithm.spaceUtilization,
       Random: data.random.spaceUtilization,
       Sequential: data.sequential.spaceUtilization,
     },
     {
       metric: "Vehicle Optimization",
-      AI: data.ai.vehicleTypeOptimization,
+      AI: data.algorithm.vehicleTypeOptimization,
       Random: data.random.vehicleTypeOptimization,
       Sequential: data.sequential.vehicleTypeOptimization,
     },
@@ -145,25 +145,25 @@ export default function AlgorithmComparison({
   const radarData = [
     {
       metric: "Space Utilization",
-      AI: data.ai.spaceUtilization,
+      AI: data.algorithm.spaceUtilization,
       Random: data.random.spaceUtilization,
       Sequential: data.sequential.spaceUtilization,
     },
     {
       metric: "Walking Distance",
-      AI: Math.max(0, 100 - (data.ai.averageWalkingDistance / 100) * 100),
+      AI: Math.max(0, 100 - (data.algorithm.averageWalkingDistance / 100) * 100),
       Random: Math.max(0, 100 - (data.random.averageWalkingDistance / 100) * 100),
       Sequential: Math.max(0, 100 - (data.sequential.averageWalkingDistance / 100) * 100),
     },
     {
       metric: "Allocation Speed",
-      AI: Math.max(0, 100 - data.ai.allocationTime * 10),
+      AI: Math.max(0, 100 - data.algorithm.allocationTime * 10),
       Random: Math.max(0, 100 - data.random.allocationTime * 10),
       Sequential: Math.max(0, 100 - data.sequential.allocationTime * 10),
     },
     {
       metric: "Vehicle Optimization",
-      AI: data.ai.vehicleTypeOptimization,
+      AI: data.algorithm.vehicleTypeOptimization,
       Random: data.random.vehicleTypeOptimization,
       Sequential: data.sequential.vehicleTypeOptimization,
     },
@@ -171,7 +171,7 @@ export default function AlgorithmComparison({
 
   const getWinner = (): { algorithm: ParkingAlgorithm; score: number } => {
     const scores = [
-      { algorithm: "ai" as ParkingAlgorithm, score: data.ai.overallScore },
+      { algorithm: "algorithm" as ParkingAlgorithm, score: data.algorithm.overallScore },
       { algorithm: "random" as ParkingAlgorithm, score: data.random.overallScore },
       { algorithm: "sequential" as ParkingAlgorithm, score: data.sequential.overallScore },
     ]

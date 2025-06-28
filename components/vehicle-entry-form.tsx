@@ -23,6 +23,7 @@ const formSchema = z.object({
   vehicleCategory: z.enum(["car", "truck", "motorcycle"]),
   stayDuration: z.string().min(1, { message: "Stay duration is required" }),
   arrivalTime: z.string().min(1, { message: "Arrival time is required" }),
+  priorityLevel: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -31,7 +32,7 @@ interface VehicleEntryFormProps {
   onComplete: () => void
 }
 
-type ParkingAlgorithm = "ai" | "random" | "sequential"
+type ParkingAlgorithm = "algorithm" | "random" | "sequential"
 
 export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) {
   const { allocateParking } = useParkingContext()
@@ -42,6 +43,7 @@ export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) 
     floor?: number
     spot?: number
     message: string
+    allocation_id?: number
   } | null>(null)
 
   const {
@@ -49,6 +51,7 @@ export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) 
     handleSubmit,
     formState: { errors },
     reset,
+    watch,
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -59,14 +62,28 @@ export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) 
     },
   })
 
+  const watchedVehicleType = watch("vehicleType")
+
   const getAlgorithmInfo = (algorithm: ParkingAlgorithm) => {
     switch (algorithm) {
-      case "ai":
+      case "algorithm":
         return { icon: Brain, color: "bg-blue-500", name: "AI Algorithm", description: "Smart optimization" }
       case "random":
         return { icon: Shuffle, color: "bg-orange-500", name: "Random Allocation", description: "Random selection" }
       case "sequential":
         return { icon: List, color: "bg-purple-500", name: "Sequential Allocation", description: "First available" }
+    }
+  }
+
+  const getDefaultPriorityLevel = (vehicleType: string): number => {
+    switch (vehicleType) {
+      case "government":
+        return 3 // Highest priority
+      case "public":
+        return 2 // High priority
+      case "private":
+      default:
+        return 1 // Normal priority
     }
   }
 
@@ -94,11 +111,20 @@ export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) 
           arrivalTime: data.arrivalTime,
           expectedDeparture,
           stayDuration: Number.parseInt(data.stayDuration),
+          priorityLevel: data.priorityLevel
+            ? Number.parseInt(data.priorityLevel)
+            : getDefaultPriorityLevel(data.vehicleType),
         },
         selectedAlgorithm,
       )
 
-      setAllocationResult(result)
+      setAllocationResult({
+        success: result.success,
+        floor: result.floor,
+        spot: result.spot_id,
+        message: result.message,
+        allocation_id: result.allocation_id,
+      })
 
       if (result.success) {
         reset()
@@ -143,9 +169,15 @@ export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) 
           <AlertTitle>{allocationResult.success ? "Parking Allocated Successfully" : "Allocation Failed"}</AlertTitle>
           <AlertDescription>
             {allocationResult.message}
-            {allocationResult.success && (
-              <div className="mt-2">
-                <Button onClick={onComplete} variant="outline" size="sm">
+            {allocationResult.success && allocationResult.allocation_id && (
+              <div className="mt-2 text-sm">
+                <div>Allocation ID: {allocationResult.allocation_id}</div>
+                {allocationResult.floor !== undefined && allocationResult.spot !== undefined && (
+                  <div>
+                    Location: Floor {allocationResult.floor + 1}, Spot {allocationResult.spot}
+                  </div>
+                )}
+                <Button onClick={onComplete} variant="outline" size="sm" className="mt-2 bg-transparent">
                   View in 3D Map
                 </Button>
               </div>
@@ -159,7 +191,7 @@ export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) 
           <CardHeader>
             <CardTitle>Enter Vehicle Details</CardTitle>
             <CardDescription>
-              Our AI system will scan the license plate and allocate the best parking spot
+              The system will allocate the best parking spot based on the selected algorithm
             </CardDescription>
           </CardHeader>
 
@@ -175,15 +207,15 @@ export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) 
               <RadioGroup defaultValue="private" className="flex space-x-4" {...register("vehicleType")}>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="government" id="government" />
-                  <Label htmlFor="government">Government</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="private" id="private" />
-                  <Label htmlFor="private">Private</Label>
+                  <Label htmlFor="government">Government (Priority: 3)</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="public" id="public" />
-                  <Label htmlFor="public">Public</Label>
+                  <Label htmlFor="public">Public (Priority: 2)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="private" id="private" />
+                  <Label htmlFor="private">Private (Priority: 1)</Label>
                 </div>
               </RadioGroup>
             </div>
@@ -204,6 +236,24 @@ export default function VehicleEntryForm({ onComplete }: VehicleEntryFormProps) 
                   <Label htmlFor="motorcycle">Motorcycle</Label>
                 </div>
               </RadioGroup>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="priorityLevel">Priority Level (Optional)</Label>
+              <Select {...register("priorityLevel")}>
+                <SelectTrigger>
+                  <SelectValue placeholder={`Default: ${getDefaultPriorityLevel(watchedVehicleType)}`} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">0 - Lowest Priority</SelectItem>
+                  <SelectItem value="1">1 - Normal Priority</SelectItem>
+                  <SelectItem value="2">2 - High Priority</SelectItem>
+                  <SelectItem value="3">3 - Highest Priority</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">
+                Default priority for {watchedVehicleType}: {getDefaultPriorityLevel(watchedVehicleType)}
+              </p>
             </div>
 
             <div className="space-y-2">

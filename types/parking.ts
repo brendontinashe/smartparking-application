@@ -1,6 +1,6 @@
 // Frontend types
 export type VehicleType = "government" | "private" | "public"
-export type ParkingAlgorithm = "ai" | "random" | "sequential"
+export type ParkingAlgorithm = "algorithm" | "random" | "sequential" // Updated to match backend
 
 export interface ParkingSpot {
   id: number
@@ -10,7 +10,7 @@ export interface ParkingSpot {
   licensePlate: string
   arrivalTime: string
   expectedDeparture: string
-  allocatedBy?: ParkingAlgorithm // Track which algorithm allocated this spot
+  allocatedBy?: ParkingAlgorithm
 }
 
 export interface ParkingData {
@@ -24,6 +24,7 @@ export interface VehicleEntry {
   expectedDeparture: string
   stayDuration: number
   algorithm?: ParkingAlgorithm
+  priorityLevel?: number
 }
 
 export interface AlgorithmPerformance {
@@ -37,12 +38,12 @@ export interface AlgorithmPerformance {
 }
 
 export interface AlgorithmComparison {
-  ai: AlgorithmPerformance
+  algorithm: AlgorithmPerformance
   random: AlgorithmPerformance
   sequential: AlgorithmPerformance
 }
 
-// API types
+// API types matching backend specification
 export interface ApiParkingSpot {
   id: number
   floor: number
@@ -52,7 +53,7 @@ export interface ApiParkingSpot {
   vehicle_type?: number // 0=Car, 1=Truck, 2=Motorcycle
   arrival_time?: string
   departure_time?: string
-  allocated_by?: string // "ai", "random", "sequential"
+  allocated_by?: string
 }
 
 export interface ApiParkingStatus {
@@ -60,40 +61,117 @@ export interface ApiParkingStatus {
   timestamp: string
 }
 
+// Updated allocation request to match backend spec
 export interface ApiAllocationRequest {
   vehicle_plate_num: string
   vehicle_plate_type: number // 0=Private, 1=Public, 2=Govt
   vehicle_type: number // 0=Car, 1=Truck, 2=Motorcycle
-  arrival_time: string
-  departure_time: string
-  priority_level: number
-  algorithm: string // "ai", "random", "sequential"
+  arrival_time: string // ISO datetime
+  departure_time: string // ISO datetime
+  priority_level: number // 0-3 (0: Lowest, 3: Highest)
 }
 
 export interface ApiAllocationResponse {
   success: boolean
-  spot_id: number
-  floor: number
+  allocation_id?: number
+  spot_id?: number
+  floor?: number
   message: string
-  algorithm_used: string
-  allocation_metrics: {
-    walking_distance: number
-    allocation_time: number
-    space_efficiency: number
+  allocation_strategy?: string
+  metrics?: {
+    walking_distance?: number
+    allocation_time?: number
+    space_efficiency?: number
   }
 }
 
-export interface ApiVehicleExitRequest {
-  vehicle_plate_num: string
-  exit_time: string
+// Simulation request for strategy comparison
+export interface ApiSimulationRequest {
+  vehicles: ApiAllocationRequest[]
+  allocation_strategy: "algorithm" | "random" | "sequential"
 }
 
-export interface ApiVehicleExitResponse {
-  success: boolean
+export interface ApiSimulationResponse {
+  strategy: string
+  results: {
+    total_vehicles: number
+    successful_allocations: number
+    average_walking_distance: number
+    space_utilization: number
+    allocation_time: number
+  }
+}
+
+// Strategy comparison request
+export interface ApiComparisonRequest extends Array<ApiAllocationRequest> {}
+
+export interface ApiComparisonResponse {
+  algorithm: {
+    strategy: "algorithm"
+    successful_allocations: number
+    average_walking_distance: number
+    space_utilization: number
+    allocation_time: number
+    overall_score: number
+  }
+  random: {
+    strategy: "random"
+    successful_allocations: number
+    average_walking_distance: number
+    space_utilization: number
+    allocation_time: number
+    overall_score: number
+  }
+  sequential: {
+    strategy: "sequential"
+    successful_allocations: number
+    average_walking_distance: number
+    space_utilization: number
+    allocation_time: number
+    overall_score: number
+  }
+}
+
+export interface ApiAllocation {
+  allocation_id: number
   vehicle_plate_num: string
+  vehicle_plate_type: number
+  vehicle_type: number
+  spot_id: number
+  floor: number
+  arrival_time: string
+  departure_time: string
+  priority_level: number
+  allocation_strategy: string
+  status: "active" | "completed"
+}
+
+export interface ApiAllocationsResponse {
+  allocations: ApiAllocation[]
+  total_count: number
+}
+
+// Update allocation request
+export interface ApiUpdateAllocationRequest {
+  departure_time: string
+}
+
+export interface ApiVehicleHistoryEntry {
+  allocation_id: number
+  vehicle_plate_num: string
+  vehicle_plate_type: number
+  vehicle_type: number
+  arrival_time: string
+  departure_time: string
   parking_duration: string
   parking_fee: number
-  message: string
+  spot_id: number
+  floor: number
+  allocation_strategy: string
+}
+
+export interface ApiVehicleHistory {
+  history: ApiVehicleHistoryEntry[]
 }
 
 export interface ApiParkingStatistics {
@@ -113,26 +191,4 @@ export interface ApiParkingStatistics {
     available: number
     occupancy_rate: number
   }[]
-  algorithm_performance: {
-    ai: AlgorithmPerformance
-    random: AlgorithmPerformance
-    sequential: AlgorithmPerformance
-  }
-}
-
-export interface ApiVehicleHistoryEntry {
-  vehicle_plate_num: string
-  vehicle_plate_type: number
-  vehicle_type: number
-  arrival_time: string
-  departure_time: string
-  parking_duration: string
-  parking_fee: number
-  spot_id: number
-  floor: number
-  allocated_by: string
-}
-
-export interface ApiVehicleHistory {
-  history: ApiVehicleHistoryEntry[]
 }

@@ -219,12 +219,14 @@ export default function ParkingVisualization() {
 
   const getAlgorithmInfo = (algorithm: ParkingAlgorithm) => {
     switch (algorithm) {
-      case "ai":
+      case "algorithm":
         return { icon: Brain, color: "bg-blue-500", name: "AI Algorithm" }
       case "random":
         return { icon: Shuffle, color: "bg-orange-500", name: "Random" }
       case "sequential":
         return { icon: List, color: "bg-purple-500", name: "Sequential" }
+      default:
+        return { icon: Brain, color: "bg-blue-500", name: "Algorithm" } // fallback – never undefined
     }
   }
 

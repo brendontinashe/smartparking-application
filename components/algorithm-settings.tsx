@@ -30,7 +30,7 @@ export default function AlgorithmSettings({
 
   const algorithms = [
     {
-      id: "ai" as ParkingAlgorithm,
+      id: "algorithm" as ParkingAlgorithm, // Updated to match backend
       name: "AI Algorithm",
       icon: Brain,
       description: "Smart allocation using machine learning",
@@ -78,7 +78,7 @@ export default function AlgorithmSettings({
 
   const handleAlgorithmChange = async (algorithm: ParkingAlgorithm) => {
     try {
-      await onAlgorithmChange(algorithm)
+      onAlgorithmChange(algorithm)
       toast({
         title: "Algorithm Updated",
         description: `Switched to ${algorithms.find((a) => a.id === algorithm)?.name}`,
@@ -117,8 +117,8 @@ export default function AlgorithmSettings({
         <Alert className="bg-green-50 border-green-200">
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Comparison mode is active. All vehicle entries will be tracked for performance analysis across different
-            algorithms. Data is being synchronized with the backend server.
+            Comparison mode is active. Use the simulation and comparison endpoints to analyze different allocation
+            strategies.
           </AlertDescription>
         </Alert>
       )}
@@ -126,7 +126,7 @@ export default function AlgorithmSettings({
       {isLoading && (
         <Alert className="bg-blue-50 border-blue-200">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <AlertDescription>Synchronizing with backend server...</AlertDescription>
+          <AlertDescription>Loading algorithm data...</AlertDescription>
         </Alert>
       )}
 
@@ -193,8 +193,7 @@ export default function AlgorithmSettings({
             {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           </CardTitle>
           <CardDescription>
-            This algorithm will be used for all new vehicle allocations. Changes are synchronized with the backend
-            server.
+            This algorithm preference will be used for allocations. The backend manages the actual strategy selection.
           </CardDescription>
         </CardHeader>
         <CardContent>
